@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Sonar Display</title>
+
+<style>
+body{
+    margin:0;
+    background:black;
+    overflow:hidden;
+    font-family:Consolas;
+}
+
+button{
+    position:absolute;
+    top:20px;
+    left:20px;
+    z-index:100;
+    padding:10px 20px;
+    font-size:18px;
+}
+
+#info{
+    position:absolute;
+    right:20px;
+    top:20px;
+    color:#00ff00;
+    font-size:20px;
+}
+</style>
+</head>
+
+<body>
+
+<button onclick="connectArduino()">
+Connect Arduino
+</button>
+
+<div id="info">
+DISTANCE: 0 cm
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+
+const canvas =
+document.getElementById("canvas");
+
+const ctx =
+canvas.getContext("2d");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let echoes = [];
+
+async function connectArduino(){
+
+    const port =
+      await navigator.serial.requestPort();
+
+    await port.open({
+      baudRate:9600
+    });
+
+    const decoder =
+      new TextDecoderStream();
+
+    port.readable.pipeTo(
+      decoder.writable
+    );
+
+    const reader =
+      decoder.readable.getReader();
+
+    let buffer="";
+
+    while(true){
+
+        const {value,done}
+        = await reader.read();
+
+        if(done) break;
+
+        buffer += value;
+
+        let lines =
+          buffer.split("\n");
+
+        buffer =
+          lines.pop();
+
+        for(let line of lines){
+
+            line =
+              line.trim();
+
+            let parts =
+              line.split(",");
+
+            if(parts.length===2){
+
+                let angle =
+                parseFloat(parts[0]);
+
+                let distance =
+                parseFloat(parts[1]);
+
+                document.getElementById(
+                "info").innerHTML =
+                "DISTANCE: "
+                + Math.round(distance)
+                + " cm";
+
+                if(distance < 200){
+
+                    echoes.push({
+                        angle,
+                        distance,
+                        life:255
+                    });
+                }
+            }
+        }
+    }
+}
+
+function draw(){
+
+    ctx.fillStyle =
+      "rgba(0,0,0,0.08)";
+
+    ctx.fillRect(
+      0,0,
+      canvas.width,
+      canvas.height
+    );
+
+    let cx =
+      canvas.width/2;
+
+    let cy =
+      canvas.height-50;
+
+    ctx.strokeStyle =
+      "#00ff00";
+
+    ctx.lineWidth=1;
+
+    for(let r=100;
+        r<=600;
+        r+=100){
+
+        ctx.beginPath();
+
+        ctx.arc(
+          cx,cy,r,
+          Math.PI,
+          2*Math.PI
+        );
+
+        ctx.stroke();
+    }
+
+    ctx.beginPath();
+
+    ctx.moveTo(cx-650,cy);
+    ctx.lineTo(cx+650,cy);
+    ctx.stroke();
+
+    for(let i=
+        echoes.length-1;
+        i>=0;
+        i--){
+
+        let e =
+          echoes[i];
+
+        let radius =
+          e.distance*3;
+
+        let x =
+          cx +
+          radius *
+          Math.cos(
+            e.angle *
+            Math.PI/180
+          );
+
+        let y =
+          cy -
+          radius *
+          Math.sin(
+            e.angle *
+            Math.PI/180
+          );
+
+        ctx.fillStyle =
+          "rgba(0,255,0,"
+          +(e.life/255)
+          +")";
+
+        ctx.beginPath();
+
+        ctx.arc(
+          x,y,6,
+          0,
+          Math.PI*2
+        );
+
+        ctx.fill();
+
+        e.life -= 2;
+
+        if(e.life <= 0){
+            echoes.splice(i,1);
+        }
+    }
+
+    ctx.fillStyle =
+      "#00ff00";
+
+    ctx.font =
+      "20px Consolas";
+
+    ctx.fillText(
+      "SONAR ACTIVE",
+      30,50
+    );
+
+    requestAnimationFrame(
+      draw
+    );
+}
+
+draw();
+
+</script>
+</body>
+</html>
